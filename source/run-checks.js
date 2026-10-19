@@ -64,4 +64,11 @@ eq('pw invalid', C({ perWeek: 'x' }).perWeek, 5); eq('pw 0', C({ perWeek: '0' })
 // 値が有限
 const all = [C({}), C({}, B), C({ raised: '0' }), C({ today: '2026-12-31' })];
 eq('finite', all.every(q => ['weekly', 'monthly', 'perWorkDay', 'paceDay', 'needDay', 'projected'].every(k => q[k] == null || Number.isFinite(q[k]))), true);
+// レビュー①の反映
+eq('comma ok', Y('3,900,000').value, 3900000); eq('comma bad 1', !!Y('3,9000,000').error, true); eq('comma bad 2', !!Y('1,2').error, true); eq('comma bad 3', !!Y(',100').error, true);
+eq('comma fw', Y('３，９００，０００円').value, 3900000);
+eq('ratioRaw small', C({ goal: '1000', raised: '999', today: '2026-01-01' }).ratioRaw < 0.1, true);
+eq('empty flag', C({ raised: '' }).emptyErr.raised, true);
+eq('weekly=needUnit', (() => { const q = C({ raised: '1234567' }); return q.weekly === q.needUnit; })(), true);
+eq('countWeekly tiny', C({ price: '999999999' }).countWeekly < 0.1, true);
 console.log(`pass ${pass} / fail ${fail}`); process.exit(fail ? 1 : 0);

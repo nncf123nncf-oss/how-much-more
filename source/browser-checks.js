@@ -14,7 +14,7 @@ let ng = 0; const ck = (n, ok, extra) => { if (!ok) ng++; console.log(ok ? 'OK '
   ck('0円は倍率なし', t.includes('倍率は出せません'), t);
   await set('goal', ''); await set('raised', ''); await b.sleep(100); t = await txt(); ck('空に戻る', t.includes('入れると、ここに出ます'), t);
   await b.ev(`document.getElementById('sample').click()`); await set('today', '2026-12-26'); await b.sleep(100); t = await txt();
-  ck('残り6日は1週間あたりなし', !t.includes('1週間あたり') && t.includes('1日あたり'), t);
+  ck('残り6日は1週間あたりなし', !t.includes('1週間あたり' + String.fromCharCode(10)) && t.includes('1日あたり') && t.includes('7日未満のため'), t);
   await set('today', '2027-01-05'); await b.sleep(100);
   ck('日付エラー表示', await b.ev(`!document.getElementById('dates-err').hidden`), 0);
   ck('Infinity/NaNなし', !/NaN|Infinity|undefined/.test(await b.ev(`document.body.innerText`)), 0);

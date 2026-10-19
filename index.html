@@ -75,7 +75,12 @@
   @media (min-width: 880px) {
     .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
     .sticky { position: sticky; top: 16px; }
+  }
+  @media (min-width: 1040px) {
     .row3 { grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  }
+  @media (max-width: 340px) {
+    .stats { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -151,7 +156,7 @@
       </details>
     </section>
 
-    <section class="sticky" aria-labelledby="out-h" aria-live="polite">
+    <section class="sticky" aria-labelledby="out-h">
       <h2 id="out-h">結果</h2>
       <div id="results"><p class="empty">目標額と今までの売上を入れると、ここに出ます。</p></div>
     </section>
@@ -172,9 +177,11 @@ var HM = (function () {
   function norm(s) { return String(s == null ? '' : s).normalize('NFKC').replace(/\s+/g, ''); }
   // 円の整数だけを受ける。{empty}|{error}|{value}
   function parseYen(s) {
-    var t = norm(s).replace(/,/g, '');
+    var t = norm(s);
     if (t === '') return { empty: true };
     t = t.replace(/円$/, '');
+    if (t.indexOf(',') >= 0 && !/^\d{1,3}(,\d{3})+$/.test(t)) return { error: 'カンマの位置が合っていません（例: 3,900,000）' };
+    t = t.replace(/,/g, '');
     if (!/^\d+$/.test(t)) return { error: '整数の円で入れてください（例: 45000）' };
     var n = Number(t);
     if (n > MAX_YEN) return { error: '大きすぎる入力です' };
@@ -192,10 +199,10 @@ var HM = (function () {
   function round1(x) { return Math.round(x * 10) / 10; }
   function compute(inp) {
     var g = parseYen(inp.goal), r = parseYen(inp.raised), p = parseYen(inp.price);
-    var out = { errors: {}, ok: false, blank: false };
+    var out = { errors: {}, emptyErr: {}, ok: false, blank: false };
     if (g.empty && r.empty) { out.blank = true; if (p.error) out.errors.price = p.error; return out; }
-    if (g.error) out.errors.goal = g.error; else if (g.empty) out.errors.goal = '目標額を入れてください';
-    if (r.error) out.errors.raised = r.error; else if (r.empty) out.errors.raised = '今までの売上を入れてください（まだなければ 0）';
+    if (g.error) out.errors.goal = g.error; else if (g.empty) { out.errors.goal = '目標額を入れてください'; out.emptyErr.goal = true; }
+    if (r.error) out.errors.raised = r.error; else if (r.empty) { out.errors.raised = '今までの売上を入れてください（まだなければ 0）'; out.emptyErr.raised = true; }
     if (p.error) out.errors.price = p.error; else if (p.value === 0) out.errors.price = '1円以上で入れてください';
     var s = dayNum(inp.start), e = dayNum(inp.end), t = dayNum(inp.today);
     if (s === null || e === null || t === null) out.errors.dates = '開始日・期限日・今日の3つを入れてください';
@@ -216,14 +223,15 @@ var HM = (function () {
     var price = (!p.empty && !p.error && p.value > 0) ? p.value : null;
     if (price !== null) {
       out.count = Math.floor((R + price - 1) / price); // 整数どうしの切り上げ
-      out.countWeekly = remain >= 7 ? round1(R / price * 7 / remain) : null;
+      out.countWeekly = remain >= 7 ? round1(R * 7 / (price * remain)) : null;
     }
-    out.paceDay = raised / elapsed; out.needDay = R / remain;
+    out.paceDay = raised / elapsed; out.needDay = R / remain; out.paceWeekV = raised * 7 / elapsed; out.needWeekV = R * 7 / remain;
     out.unit = remain >= 7 ? 'week' : 'day';
-    out.paceUnit = out.unit === 'week' ? out.paceDay * 7 : out.paceDay;
-    out.needUnit = out.unit === 'week' ? out.needDay * 7 : out.needDay;
-    out.ratio = raised > 0 ? round1(out.needDay / out.paceDay) : null;
-    out.projected = Math.round(raised / elapsed * total);
+    out.paceUnit = out.unit === 'week' ? out.paceWeekV : out.paceDay;
+    out.needUnit = out.unit === 'week' ? out.needWeekV : out.needDay;
+    out.ratioRaw = raised > 0 ? out.needDay / out.paceDay : null;
+    out.ratio = out.ratioRaw === null ? null : round1(out.ratioRaw);
+    out.projected = Math.round(raised * total / elapsed);
     out.diff = goal - out.projected;
     return out;
   }
@@ -234,6 +242,7 @@ var HM = (function () {
 <script id="ui">
 (function () {
   var $ = function (id) { return document.getElementById(id); };
+  var touched = {};
   var IDS = ['goal', 'raised', 'start', 'end', 'today', 'perweek', 'price'];
   function isoLocal(d) { var m = d.getMonth() + 1, dd = d.getDate(); return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd; }
   function defaults() { var n = new Date(); return { start: n.getFullYear() + '-01-01', end: n.getFullYear() + '-12-31', today: isoLocal(n) }; }
@@ -247,11 +256,13 @@ var HM = (function () {
   function paceRow(label, value, ratioOfMax, cls) {
     var row = el('div', 'pace-row'), t = el('div', 't'); t.appendChild(el('span', null, label)); t.appendChild(el('b', null, value)); row.appendChild(t);
     var bar = el('div', 'bar'); bar.setAttribute('role', 'img'); bar.setAttribute('aria-label', label + ' ' + value);
-    var sp = el('span', cls); sp.style.width = Math.max(0, Math.min(100, ratioOfMax * 100)) + '%'; bar.appendChild(sp); row.appendChild(bar); return row;
+    var sp = el('span', cls); sp.style.width = (ratioOfMax > 0 ? Math.max(1.5, Math.min(100, ratioOfMax * 100)) : 0) + '%'; bar.appendChild(sp); row.appendChild(bar); return row;
   }
   function render() {
     var c = HM.compute(read());
-    setErr('goal-err', c.errors.goal, 'goal'); setErr('raised-err', c.errors.raised, 'raised'); setErr('price-err', c.errors.price, 'price'); setErr('dates-err', c.errors.dates, null);
+    var show = function (k) { return c.errors[k] && !(c.emptyErr && c.emptyErr[k] && !touched[k]) ? c.errors[k] : ''; };
+    setErr('goal-err', show('goal'), 'goal'); setErr('raised-err', show('raised'), 'raised'); setErr('price-err', c.errors.price, 'price'); setErr('dates-err', c.errors.dates, null);
+    ['start', 'end', 'today'].forEach(function (id) { if (c.errors.dates) { $(id).setAttribute('aria-invalid', 'true'); $(id).setAttribute('aria-describedby', 'dates-err'); } else { $(id).removeAttribute('aria-invalid'); $(id).removeAttribute('aria-describedby'); } });
     var box = $('results'); box.textContent = '';
     if (c.blank) { box.appendChild(el('p', 'empty', '目標額と今までの売上を入れると、ここに出ます。')); return; }
     if (!c.ok) { box.appendChild(el('p', 'empty', '入力を確認してください。赤字の案内が出ている欄を直すと、ここに結果が出ます。')); return; }
@@ -259,7 +270,7 @@ var HM = (function () {
     if (c.done) {
       var rd = el('div', 'remain'); rd.appendChild(el('p', 'lbl', '残り金額'));
       rd.appendChild(el('p', 'big', '0円'));
-      rd.appendChild(el('p', 'sub', '今までの売上が目標額に達しています（目標より ' + f(c.over) + '円 多い）。必要額の計算は出しません。'));
+      rd.appendChild(el('p', 'sub', c.over === 0 ? '今までの売上は目標額と同じです。必要額の計算は出しません。' : '今までの売上が目標額を超えています（目標より ' + f(c.over) + '円 多い）。必要額の計算は出しません。'));
       box.appendChild(rd); return;
     }
     var rem = el('div', 'remain'); rem.appendChild(el('p', 'lbl', '目標まで、あと'));
@@ -275,12 +286,14 @@ var HM = (function () {
     dl.appendChild(stat('稼働日の数', HM.round1(c.workDays) + '日'));
     if (c.count != null) {
       dl.appendChild(stat('必要な件数', f(c.count) + '件', c.countWeekly == null ? 'wide' : ''));
-      if (c.countWeekly != null) dl.appendChild(stat('1週間あたりの件数', c.countWeekly + '件'));
+      if (c.countWeekly != null) dl.appendChild(stat('1週間あたりの件数', c.countWeekly < 0.1 ? '0.1件未満' : (c.countWeekly >= 1000 ? f(c.countWeekly) : c.countWeekly) + '件'));
     }
     need.appendChild(dl);
-    if (c.count == null) need.appendChild(el('p', 'note', '1件あたりの単価を入れると、必要な件数が出ます。'));
+    if (c.count == null) need.appendChild(el('p', 'note', c.errors.price ? '単価を直すと、必要な件数が出ます。' : '1件あたりの単価を入れると、必要な件数が出ます。'));
     else need.appendChild(el('p', 'note', '件数は 残り金額 ÷ 単価 を切り上げた数です。'));
     need.appendChild(el('p', 'note', '稼働日は、祝日や休みを数えない近似です。'));
+    if (c.weekly === null) need.appendChild(el('p', 'note', '残りが7日未満のため、1週間あたりは出しません。'));
+    else if (c.monthly === null) need.appendChild(el('p', 'note', '残りが31日未満のため、1か月あたりは出しません。'));
     box.appendChild(need);
 
     var pace = el('div', 'block'); pace.appendChild(el('h3', null, 'ペースを並べると'));
@@ -288,7 +301,7 @@ var HM = (function () {
     var mx = Math.max(c.paceUnit, c.needUnit);
     pace.appendChild(paceRow('今までのペース（' + u + '）', f(c.paceUnit) + '円', mx > 0 ? c.paceUnit / mx : 0, 'seg-past'));
     pace.appendChild(paceRow('これから必要なペース（' + u + '）', f(c.needUnit) + '円', mx > 0 ? c.needUnit / mx : 0, 'seg-need'));
-    if (c.ratio !== null) pace.appendChild(el('p', 'ratio', 'これから必要なペースは、今までの約' + c.ratio + '倍'));
+    if (c.ratioRaw !== null) pace.appendChild(el('p', 'ratio', c.ratioRaw < 0.1 ? 'これから必要なペースは、今までの1割に満たない額' : 'これから必要なペースは、今までの約' + (c.ratio >= 1000 ? f(c.ratio) : c.ratio) + '倍'));
     else pace.appendChild(el('p', 'note', '今までの売上が0円のため、倍率は出せません。'));
     pace.appendChild(el('p', 'note', '今までのペース ＝ 今までの売上 ÷ 開始日から今日までの ' + f(c.elapsed) + '日。'));
     box.appendChild(pace);
@@ -305,8 +318,8 @@ var HM = (function () {
   $('sample').addEventListener('click', function () {
     $('goal').value = '6000000'; $('raised').value = '3900000'; $('start').value = '2026-01-01'; $('end').value = '2026-12-31'; $('today').value = '2026-10-20'; $('perweek').value = '5'; $('price').value = '45000'; render();
   });
-  $('clear').addEventListener('click', function () { $('goal').value = ''; $('raised').value = ''; $('price').value = ''; setDefaults(); render(); });
-  IDS.forEach(function (id) { $(id).addEventListener('input', render); $(id).addEventListener('change', render); });
+  $('clear').addEventListener('click', function () { touched = {}; $('goal').value = ''; $('raised').value = ''; $('price').value = ''; setDefaults(); render(); });
+  IDS.forEach(function (id) { $(id).addEventListener('input', render); $(id).addEventListener('change', render); $(id).addEventListener('blur', function () { touched[id] = true; render(); }); });
   setDefaults(); render();
 })();
 </script>
