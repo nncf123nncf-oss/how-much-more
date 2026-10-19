@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>あと何円稼げばいい？</title>
+<meta name="description" content="目標額・今までの売上・期間を入れると、残りの金額と、1か月・1週間・1稼働日あたりの必要額を出します。単価を入れれば必要件数まで。入力はこの端末の中だけで処理し、保存もしません。">
+<style>
+  :root {
+    --bg: #f8f5ee; --surface: #ffffff; --ink: #231f17; --ink2: #463f31; --ink3: #5e5545;
+    --line: #dcd4c2; --line-strong: #7d725c; --accent: #8A5A00; --accent-ink: #ffffff; --accent-soft: #fbf0d6;
+    --danger: #a8231b; --c-past: #3c5a6e; --c-need: #8A5A00;
+    --font: "Hiragino Sans","Yu Gothic","BIZ UDPGothic","Noto Sans JP",system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17130c; --surface: #221d13; --ink: #f6efe0; --ink2: #d8ccb4; --ink3: #b0a58c;
+      --line: #42392a; --line-strong: #8d8168; --accent: #F2B84B; --accent-ink: #2b1a00; --accent-soft: #3a2f16;
+      --danger: #ff9a92; --c-past: #8fb4cc; --c-need: #F2B84B;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.6; }
+  main { max-width: 1040px; margin: 0 auto; padding: 16px 16px 32px; }
+  h1 { font-size: 22px; line-height: 1.3; margin: 8px 0 8px; }
+  h2 { font-size: 18px; line-height: 1.4; margin: 0 0 10px; }
+  h3 { font-size: 16px; line-height: 1.4; margin: 0 0 8px; }
+  p { margin: 0 0 10px; }
+  .lead { color: var(--ink2); }
+  .notes { margin: 0 0 16px; padding: 12px 14px 12px 30px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; color: var(--ink2); font-size: 15px; }
+  .notes li { margin: 0 0 4px; } .notes li:last-child { margin: 0; }
+  summary { cursor: pointer; font-weight: 700; padding: 10px 0; min-height: 44px; }
+  details ul { margin: 0 0 12px; padding-left: 1.3em; } details li { margin: 0 0 4px; }
+
+  .layout { display: block; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin: 0 0 16px; }
+  label { display: block; font-size: 14px; font-weight: 700; color: var(--ink2); margin: 0 0 4px; }
+  .hint { font-size: 13px; color: var(--ink3); margin: 4px 0 0; }
+  input[type="text"], input[type="date"], select { width: 100%; min-height: 44px; padding: 8px 10px; font: inherit; font-size: 16px; color: var(--ink); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 6px; }
+  input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  input[aria-invalid="true"] { border-color: var(--danger); border-width: 2px; }
+  .err { color: var(--danger); font-size: 13px; margin: 4px 0 0; overflow-wrap: anywhere; }
+  .row { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 0 0 12px; }
+  .row > div { min-width: 0; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+  button { min-height: 44px; padding: 8px 14px; font: inherit; font-size: 15px; font-weight: 700; color: var(--accent); background: var(--surface); border: 2px solid var(--accent); border-radius: 6px; cursor: pointer; }
+
+  .empty { color: var(--ink3); }
+  .remain { border: 2px solid var(--accent); border-radius: 8px; padding: 12px; background: var(--accent-soft); margin: 0 0 14px; }
+  .remain .lbl { font-size: 14px; color: var(--ink2); margin: 0; }
+  .remain .big { font-size: 30px; font-weight: 700; line-height: 1.3; margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+  .remain .sub { font-size: 13px; color: var(--ink2); margin: 4px 0 0; overflow-wrap: anywhere; }
+  .block { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 0 0 14px; background: var(--surface); }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 0; }
+  .stat { min-width: 0; margin: 0; }
+  .stat dt { font-size: 13px; color: var(--ink3); margin: 0; }
+  .stat dd { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+  .stat.wide { grid-column: 1 / -1; }
+  .note { font-size: 14px; color: var(--ink2); margin: 8px 0 0; overflow-wrap: anywhere; }
+  .note.warn { color: var(--danger); font-weight: 700; }
+  .pace-row { margin: 0 0 10px; }
+  .pace-row .t { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; font-size: 14px; margin: 0 0 3px; }
+  .pace-row .t b { font-size: 16px; overflow-wrap: anywhere; }
+  .bar { height: 18px; border-radius: 4px; overflow: hidden; border: 1px solid var(--line-strong); background: var(--surface); }
+  .bar span { display: block; height: 100%; }
+  .seg-past { background: var(--c-past); }
+  .seg-need { background: repeating-linear-gradient(45deg, var(--c-need) 0 4px, transparent 4px 8px); }
+  .ratio { font-size: 16px; font-weight: 700; margin: 4px 0 0; overflow-wrap: anywhere; }
+
+  .mw-footer { box-sizing: border-box; width: 100%; max-width: 100%; margin: 24px 0 0; padding: 16px; background: #F7F7F8;
+    border: 1px solid #D8D8DC; border-radius: 6px; color: #3A3A3E; font-family: system-ui, sans-serif; font-size: 12px; line-height: 1.7; }
+  .mw-footer p { margin: 0 0 6px; } .mw-footer p:last-child { margin-bottom: 0; } .mw-footer a { color: #0B5AA6; display: inline-block; padding: 13px 0; }
+
+  @media (min-width: 880px) {
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+    .sticky { position: sticky; top: 16px; }
+    .row3 { grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>あと何円稼げばいい？</h1>
+  <p class="lead">目標額と今までの売上、期間を入れると、残りの金額を「1か月・1週間・1稼働日あたり」に直して出します。1件の単価を入れれば、必要な件数も出ます。</p>
+  <ul class="notes">
+    <li><strong>手取りではありません。</strong>目標額は「受け取る売上」で入れてください。税金・社会保険・経費は入っていません。売上は税込か税抜のどちらかに揃えます。</li>
+    <li>「同じペースが続いた場合」は単純な計算で、先の見通しではありません。これからの仕事量・季節の波・入金の時期は入っていません。</li>
+    <li>入力はこの端末の中だけで処理し、保存しません。ページを閉じると消えます。</li>
+  </ul>
+
+  <div class="layout">
+    <section class="panel" aria-labelledby="in-h">
+      <h2 id="in-h">数字を入れる</h2>
+      <div class="btns">
+        <button type="button" id="sample">サンプルで試す</button>
+        <button type="button" id="clear">全部消す</button>
+      </div>
+      <div class="row">
+        <div>
+          <label for="goal">目標額（円）</label>
+          <input type="text" id="goal" inputmode="numeric" autocomplete="off" placeholder="例: 6000000">
+          <p class="hint">期間の終わりまでに受け取りたい売上の合計。</p>
+          <p class="err" id="goal-err" hidden></p>
+        </div>
+        <div>
+          <label for="raised">今までの売上（円）</label>
+          <input type="text" id="raised" inputmode="numeric" autocomplete="off" placeholder="例: 3900000">
+          <p class="hint">開始日から今日までに受け取った売上。まだなければ 0 と入れます。</p>
+          <p class="err" id="raised-err" hidden></p>
+        </div>
+      </div>
+      <div class="row row3">
+        <div>
+          <label for="start">開始日</label>
+          <input type="date" id="start">
+        </div>
+        <div>
+          <label for="end">期限日</label>
+          <input type="date" id="end">
+        </div>
+        <div>
+          <label for="today">今日</label>
+          <input type="date" id="today">
+        </div>
+      </div>
+      <p class="hint" style="margin:-6px 0 10px">初めは今年の1月1日〜12月31日と、今日の日付が入っています。今日と期限日の両方を数えます。</p>
+      <p class="err" id="dates-err" hidden></p>
+      <div class="row">
+        <div>
+          <label for="perweek">週に仕事をする日数</label>
+          <select id="perweek">
+            <option value="1">1日</option><option value="2">2日</option><option value="3">3日</option><option value="4">4日</option><option value="5" selected>5日</option><option value="6">6日</option><option value="7">7日</option>
+          </select>
+          <p class="hint">祝日や休みは数えません。残り日数×この日数÷7 で稼働日を出します。</p>
+        </div>
+        <div>
+          <label for="price">1件あたりの単価（円・任意）</label>
+          <input type="text" id="price" inputmode="numeric" autocomplete="off" placeholder="例: 45000">
+          <p class="hint">入れると、必要な件数が出ます。</p>
+          <p class="err" id="price-err" hidden></p>
+        </div>
+      </div>
+      <details>
+        <summary>見ているもの・見ないもの</summary>
+        <ul>
+          <li>見ているもの: 目標額、今までの売上、開始日・期限日・今日、週の稼働日数、単価。</li>
+          <li>見ないもの: 税金・社会保険・経費、祝日や休業日、季節の波、入金の時期、他の人との比較。</li>
+          <li>金額は整数の円で入れます。全角の数字やカンマ、「円」が付いていても読みます。</li>
+        </ul>
+      </details>
+    </section>
+
+    <section class="sticky" aria-labelledby="out-h" aria-live="polite">
+      <h2 id="out-h">結果</h2>
+      <div id="results"><p class="empty">目標額と今までの売上を入れると、ここに出ます。</p></div>
+    </section>
+  </div>
+
+  <footer class="mw-footer">
+    <p>みちAIワークス（MICHI AI WORKS）／代表 田中　泉</p>
+    <p>運営: <a href="https://michi-portfolio.vercel.app/" rel="noopener">みちAIワークス 公式サイト</a>（https://michi-portfolio.vercel.app/ ）／ お問い合わせ: <a href="mailto:nncf123nncf@gmail.com">nncf123nncf@gmail.com</a></p>
+    <p>入力した数字はこのページの中（お使いの端末のブラウザ）だけで処理し、サーバーには送信せず、保存もしません。ページを閉じると消えます。アクセス解析（Cloudflare Web Analytics）で、ページの閲覧状況（閲覧数・参照元・ブラウザの種類など）を計測しています。入力した数字は送信しません。</p>
+    <p>このページの数字は手取りではなく、税金や社会保険は入っていません。「同じペースが続いた場合」は単純な計算で、先の見通しではありません。判断はご自身で行ってください。</p>
+    <p>ログイン・会員登録・パスワードの入力を求めることはありません。</p>
+  </footer>
+</main>
+
+<script id="core">
+var HM = (function () {
+  var MAX_YEN = 999999999, MAX_DAYS = 3660;
+  function norm(s) { return String(s == null ? '' : s).normalize('NFKC').replace(/\s+/g, ''); }
+  // 円の整数だけを受ける。{empty}|{error}|{value}
+  function parseYen(s) {
+    var t = norm(s).replace(/,/g, '');
+    if (t === '') return { empty: true };
+    t = t.replace(/円$/, '');
+    if (!/^\d+$/.test(t)) return { error: '整数の円で入れてください（例: 45000）' };
+    var n = Number(t);
+    if (n > MAX_YEN) return { error: '大きすぎる入力です' };
+    return { value: n };
+  }
+  // 'YYYY-MM-DD' → UTC日付の通し日数。不正なら null
+  function dayNum(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3], ms = Date.UTC(y, mo - 1, d), dt = new Date(ms);
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+    return Math.round(ms / 86400000);
+  }
+  function fmt(n) { var r = Math.round(n), neg = r < 0; r = Math.abs(r); return (neg ? '−' : '') + String(r).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function round1(x) { return Math.round(x * 10) / 10; }
+  function compute(inp) {
+    var g = parseYen(inp.goal), r = parseYen(inp.raised), p = parseYen(inp.price);
+    var out = { errors: {}, ok: false, blank: false };
+    if (g.empty && r.empty) { out.blank = true; if (p.error) out.errors.price = p.error; return out; }
+    if (g.error) out.errors.goal = g.error; else if (g.empty) out.errors.goal = '目標額を入れてください';
+    if (r.error) out.errors.raised = r.error; else if (r.empty) out.errors.raised = '今までの売上を入れてください（まだなければ 0）';
+    if (p.error) out.errors.price = p.error; else if (p.value === 0) out.errors.price = '1円以上で入れてください';
+    var s = dayNum(inp.start), e = dayNum(inp.end), t = dayNum(inp.today);
+    if (s === null || e === null || t === null) out.errors.dates = '開始日・期限日・今日の3つを入れてください';
+    else if (s > e) out.errors.dates = '開始日が期限日より後になっています';
+    else if (t < s) out.errors.dates = '今日が開始日より前になっています';
+    else if (t > e) out.errors.dates = '期限日が今日より前になっています';
+    else if (e - s + 1 > MAX_DAYS) out.errors.dates = '期間が長すぎます（3,660日まで）';
+    if (out.errors.goal || out.errors.raised || out.errors.dates) return out;
+    var goal = g.value, raised = r.value, total = e - s + 1, elapsed = t - s + 1, remain = e - t + 1;
+    var pw = Math.min(7, Math.max(1, parseInt(inp.perWeek, 10) || 5));
+    out.ok = true; out.goal = goal; out.raised = raised; out.total = total; out.elapsed = elapsed; out.remain = remain; out.perWeek = pw;
+    var R = goal - raised; out.R = R;
+    if (R <= 0) { out.done = true; out.over = -R; return out; }
+    out.weekly = remain >= 7 ? R * 7 / remain : null;
+    out.monthly = remain >= 31 ? R * 365 / (12 * remain) : null;
+    out.workDays = remain * pw / 7;
+    out.perWorkDay = R * 7 / (remain * pw);
+    var price = (!p.empty && !p.error && p.value > 0) ? p.value : null;
+    if (price !== null) {
+      out.count = Math.floor((R + price - 1) / price); // 整数どうしの切り上げ
+      out.countWeekly = remain >= 7 ? round1(R / price * 7 / remain) : null;
+    }
+    out.paceDay = raised / elapsed; out.needDay = R / remain;
+    out.unit = remain >= 7 ? 'week' : 'day';
+    out.paceUnit = out.unit === 'week' ? out.paceDay * 7 : out.paceDay;
+    out.needUnit = out.unit === 'week' ? out.needDay * 7 : out.needDay;
+    out.ratio = raised > 0 ? round1(out.needDay / out.paceDay) : null;
+    out.projected = Math.round(raised / elapsed * total);
+    out.diff = goal - out.projected;
+    return out;
+  }
+  return { parseYen: parseYen, dayNum: dayNum, fmt: fmt, round1: round1, compute: compute, MAX_YEN: MAX_YEN };
+})();
+</script>
+
+<script id="ui">
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var IDS = ['goal', 'raised', 'start', 'end', 'today', 'perweek', 'price'];
+  function isoLocal(d) { var m = d.getMonth() + 1, dd = d.getDate(); return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd; }
+  function defaults() { var n = new Date(); return { start: n.getFullYear() + '-01-01', end: n.getFullYear() + '-12-31', today: isoLocal(n) }; }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function read() { return { goal: $('goal').value, raised: $('raised').value, start: $('start').value, end: $('end').value, today: $('today').value, perWeek: $('perweek').value, price: $('price').value }; }
+  function setErr(id, msg, inputId) {
+    var e = $(id); if (msg) { e.textContent = msg; e.hidden = false; } else { e.textContent = ''; e.hidden = true; }
+    var i = $(inputId); if (i) { if (msg) i.setAttribute('aria-invalid', 'true'); else i.removeAttribute('aria-invalid'); }
+  }
+  function stat(dt, dd, cls) { var d = el('div', 'stat' + (cls ? ' ' + cls : '')); var a = el('dt', null, dt); var b = el('dd', null, dd); d.appendChild(a); d.appendChild(b); return d; }
+  function paceRow(label, value, ratioOfMax, cls) {
+    var row = el('div', 'pace-row'), t = el('div', 't'); t.appendChild(el('span', null, label)); t.appendChild(el('b', null, value)); row.appendChild(t);
+    var bar = el('div', 'bar'); bar.setAttribute('role', 'img'); bar.setAttribute('aria-label', label + ' ' + value);
+    var sp = el('span', cls); sp.style.width = Math.max(0, Math.min(100, ratioOfMax * 100)) + '%'; bar.appendChild(sp); row.appendChild(bar); return row;
+  }
+  function render() {
+    var c = HM.compute(read());
+    setErr('goal-err', c.errors.goal, 'goal'); setErr('raised-err', c.errors.raised, 'raised'); setErr('price-err', c.errors.price, 'price'); setErr('dates-err', c.errors.dates, null);
+    var box = $('results'); box.textContent = '';
+    if (c.blank) { box.appendChild(el('p', 'empty', '目標額と今までの売上を入れると、ここに出ます。')); return; }
+    if (!c.ok) { box.appendChild(el('p', 'empty', '入力を確認してください。赤字の案内が出ている欄を直すと、ここに結果が出ます。')); return; }
+    var f = HM.fmt;
+    if (c.done) {
+      var rd = el('div', 'remain'); rd.appendChild(el('p', 'lbl', '残り金額'));
+      rd.appendChild(el('p', 'big', '0円'));
+      rd.appendChild(el('p', 'sub', '今までの売上が目標額に達しています（目標より ' + f(c.over) + '円 多い）。必要額の計算は出しません。'));
+      box.appendChild(rd); return;
+    }
+    var rem = el('div', 'remain'); rem.appendChild(el('p', 'lbl', '目標まで、あと'));
+    rem.appendChild(el('p', 'big', f(c.R) + '円'));
+    rem.appendChild(el('p', 'sub', '期限日まで ' + f(c.remain) + '日（今日と期限日を含む）／目標 ' + f(c.goal) + '円 − 今までの売上 ' + f(c.raised) + '円'));
+    box.appendChild(rem);
+
+    var need = el('div', 'block'); need.appendChild(el('h3', null, 'これを割ると'));
+    var dl = el('dl', 'stats');
+    if (c.monthly !== null) dl.appendChild(stat('1か月あたり', f(c.monthly) + '円'));
+    if (c.weekly !== null) dl.appendChild(stat('1週間あたり', f(c.weekly) + '円'));
+    dl.appendChild(stat('1稼働日あたり', f(c.perWorkDay) + '円'));
+    dl.appendChild(stat('稼働日の数', HM.round1(c.workDays) + '日'));
+    if (c.count != null) {
+      dl.appendChild(stat('必要な件数', f(c.count) + '件', c.countWeekly == null ? 'wide' : ''));
+      if (c.countWeekly != null) dl.appendChild(stat('1週間あたりの件数', c.countWeekly + '件'));
+    }
+    need.appendChild(dl);
+    if (c.count == null) need.appendChild(el('p', 'note', '1件あたりの単価を入れると、必要な件数が出ます。'));
+    else need.appendChild(el('p', 'note', '件数は 残り金額 ÷ 単価 を切り上げた数です。'));
+    need.appendChild(el('p', 'note', '稼働日は、祝日や休みを数えない近似です。'));
+    box.appendChild(need);
+
+    var pace = el('div', 'block'); pace.appendChild(el('h3', null, 'ペースを並べると'));
+    var u = c.unit === 'week' ? '1週間あたり' : '1日あたり';
+    var mx = Math.max(c.paceUnit, c.needUnit);
+    pace.appendChild(paceRow('今までのペース（' + u + '）', f(c.paceUnit) + '円', mx > 0 ? c.paceUnit / mx : 0, 'seg-past'));
+    pace.appendChild(paceRow('これから必要なペース（' + u + '）', f(c.needUnit) + '円', mx > 0 ? c.needUnit / mx : 0, 'seg-need'));
+    if (c.ratio !== null) pace.appendChild(el('p', 'ratio', 'これから必要なペースは、今までの約' + c.ratio + '倍'));
+    else pace.appendChild(el('p', 'note', '今までの売上が0円のため、倍率は出せません。'));
+    pace.appendChild(el('p', 'note', '今までのペース ＝ 今までの売上 ÷ 開始日から今日までの ' + f(c.elapsed) + '日。'));
+    box.appendChild(pace);
+
+    var proj = el('div', 'block'); proj.appendChild(el('h3', null, 'このまま同じペースが続いた場合'));
+    var dl2 = el('dl', 'stats');
+    dl2.appendChild(stat('期限日までの合計（単純計算）', f(c.projected) + '円', 'wide'));
+    dl2.appendChild(stat('目標との差', c.diff > 0 ? f(c.diff) + '円 不足' : (c.diff < 0 ? f(-c.diff) + '円 上回る' : '差なし'), 'wide'));
+    proj.appendChild(dl2);
+    proj.appendChild(el('p', 'note', '今までの売上 ÷ ' + f(c.elapsed) + '日 × 期間全体の ' + f(c.total) + '日。先の見通しではありません。'));
+    box.appendChild(proj);
+  }
+  function setDefaults() { var d = defaults(); $('start').value = d.start; $('end').value = d.end; $('today').value = d.today; $('perweek').value = '5'; }
+  $('sample').addEventListener('click', function () {
+    $('goal').value = '6000000'; $('raised').value = '3900000'; $('start').value = '2026-01-01'; $('end').value = '2026-12-31'; $('today').value = '2026-10-20'; $('perweek').value = '5'; $('price').value = '45000'; render();
+  });
+  $('clear').addEventListener('click', function () { $('goal').value = ''; $('raised').value = ''; $('price').value = ''; setDefaults(); render(); });
+  IDS.forEach(function (id) { $(id).addEventListener('input', render); $(id).addEventListener('change', render); });
+  setDefaults(); render();
+})();
+</script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js"
+        data-cf-beacon='{"token": "b4c9f7e78daf4edb84ef52b88633f649"}'></script>
+</body>
+</html>
